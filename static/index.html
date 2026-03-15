@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qwen3 TTS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Qwen3 TTS</h1>
+      <div class="status-badge" id="statusBadge">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Connecting…</span>
+      </div>
+    </header>
+
+    <main class="app-main">
+
+      <!-- Text Input -->
+      <section class="card">
+        <label class="card-title" for="textInput">Text</label>
+        <textarea
+          id="textInput"
+          class="text-input"
+          rows="7"
+          maxlength="5000"
+          placeholder="Enter text to synthesize…"
+          spellcheck="true"
+        ></textarea>
+        <div class="char-counter">
+          <span id="charCount">0</span> / <span id="charMax">5000</span>
+        </div>
+      </section>
+
+      <!-- Voice Settings -->
+      <section class="card">
+        <div class="card-title">Voice Settings</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="speakerSelect">Speaker</label>
+            <select id="speakerSelect"></select>
+            <div class="field-hint" id="speakerHint"></div>
+          </div>
+          <div class="form-group">
+            <label for="languageSelect">Language</label>
+            <select id="languageSelect"></select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Style Instruction -->
+      <section class="card">
+        <label class="card-title" for="instructInput">Style Instruction <span class="card-title-note">(optional)</span></label>
+        <input
+          type="text"
+          id="instructInput"
+          class="instruct-input"
+          maxlength="500"
+          placeholder="e.g. Speak slowly and warmly, as if telling a bedtime story"
+        />
+        <div class="field-hint">Describe tone, pace, emotion — separate from the text being spoken.</div>
+      </section>
+
+      <!-- Post-Processing -->
+      <section class="card">
+        <button class="card-title collapsible" id="ppToggle" aria-expanded="true">
+          Post-Processing
+          <span class="chevron" aria-hidden="true">▸</span>
+        </button>
+        <div class="collapsible-body" id="ppBody">
+          <div class="pp-grid">
+            <label class="checkbox-label">
+              <input type="checkbox" id="upsampleCheck" checked />
+              Upsample
+            </label>
+            <div class="form-group inline">
+              <label for="targetSrSelect">Target SR</label>
+              <select id="targetSrSelect">
+                <option value="22050">22 050 Hz</option>
+                <option value="44100" selected>44 100 Hz</option>
+                <option value="48000">48 000 Hz</option>
+              </select>
+            </div>
+
+            <hr class="pp-divider" />
+
+            <label class="checkbox-label">
+              <input type="checkbox" id="normalizeCheck" checked />
+              Normalize
+            </label>
+            <div></div>
+
+            <hr class="pp-divider" />
+
+            <label class="checkbox-label">
+              <input type="checkbox" id="softClipCheck" checked />
+              Soft Clip
+            </label>
+            <div class="form-group inline slider-group">
+              <label for="driveSlider">Drive <span id="driveVal">1.2</span></label>
+              <input type="range" id="driveSlider" min="0.5" max="3.0" step="0.1" value="1.2" />
+            </div>
+
+            <hr class="pp-divider" />
+
+            <label class="checkbox-label">
+              <input type="checkbox" id="stereoCheck" checked />
+              Pseudo-Stereo
+            </label>
+            <div class="form-group inline slider-group">
+              <label for="delaySlider">Delay <span id="delayVal">15</span> ms</label>
+              <input type="range" id="delaySlider" min="1" max="50" step="1" value="15" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Output Format -->
+      <section class="card format-row">
+        <span class="card-title">Output Format</span>
+        <label class="radio-label">
+          <input type="radio" name="format" value="wav" checked /> WAV
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="format" value="mp3" /> MP3
+        </label>
+      </section>
+
+      <!-- Generate Button -->
+      <button class="btn-generate" id="generateBtn" disabled>
+        <span class="btn-icon" aria-hidden="true">▶</span>
+        <span id="generateLabel">Generate</span>
+      </button>
+
+      <!-- Result -->
+      <section class="card result-card" id="resultCard" hidden>
+        <div class="card-title">Result <span class="elapsed" id="elapsedBadge"></span></div>
+        <audio id="audioPlayer" controls></audio>
+        <a id="downloadLink" class="btn-download" download>
+          ⬇ Download
+        </a>
+      </section>
+
+      <!-- Error -->
+      <div class="error-box" id="errorBox" hidden></div>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

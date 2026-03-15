@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+torch
+torchaudio
+numpy
+soundfile
+qwen_tts
+pydub
