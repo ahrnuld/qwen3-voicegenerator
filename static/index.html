@@ -51,30 +51,93 @@
       <!-- Voice Settings -->
       <section class="card">
         <div class="card-title">Voice Settings</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="speakerSelect">Speaker</label>
-            <select id="speakerSelect"></select>
-            <div class="field-hint" id="speakerHint"></div>
+
+        <!-- Mode tabs -->
+        <div class="mode-tabs" role="tablist">
+          <button class="mode-tab active" id="tabCustomVoice" role="tab" aria-selected="true"  data-mode="custom_voice">Custom Voice</button>
+          <button class="mode-tab"        id="tabVoiceDesign" role="tab" aria-selected="false" data-mode="voice_design">Voice Design</button>
+          <button class="mode-tab"        id="tabVoiceClone"  role="tab" aria-selected="false" data-mode="voice_clone">Voice Clone</button>
+        </div>
+
+        <!-- Custom Voice panel -->
+        <div id="panelCustomVoice" class="mode-panel">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="speakerSelect">Speaker</label>
+              <select id="speakerSelect"></select>
+              <div class="field-hint" id="speakerHint"></div>
+            </div>
+            <div class="form-group">
+              <label for="languageSelect">Language</label>
+              <select id="languageSelect"></select>
+            </div>
           </div>
-          <div class="form-group">
-            <label for="languageSelect">Language</label>
-            <select id="languageSelect"></select>
+          <div class="form-group" style="margin-top:0.75rem">
+            <label for="instructInput">Style Instruction <span class="card-title-note">(optional)</span></label>
+            <input
+              type="text"
+              id="instructInput"
+              class="instruct-input"
+              maxlength="1000"
+              placeholder="e.g. Speak slowly and warmly, as if telling a bedtime story"
+            />
+            <div class="field-hint">Tone, pace, emotion — applied on top of the chosen speaker.</div>
           </div>
         </div>
-      </section>
 
-      <!-- Style Instruction -->
-      <section class="card">
-        <label class="card-title" for="instructInput">Style Instruction <span class="card-title-note">(optional)</span></label>
-        <input
-          type="text"
-          id="instructInput"
-          class="instruct-input"
-          maxlength="500"
-          placeholder="e.g. Speak slowly and warmly, as if telling a bedtime story"
-        />
-        <div class="field-hint">Describe tone, pace, emotion — separate from the text being spoken.</div>
+        <!-- Voice Design panel -->
+        <div id="panelVoiceDesign" class="mode-panel" hidden>
+          <div class="form-group">
+            <label for="languageSelectVD">Language</label>
+            <select id="languageSelectVD"></select>
+          </div>
+          <div class="form-group" style="margin-top:0.75rem">
+            <label for="voiceDescInput">Voice Description <span class="card-title-note">(required)</span></label>
+            <textarea
+              id="voiceDescInput"
+              class="instruct-input"
+              rows="3"
+              maxlength="1000"
+              placeholder="e.g. A calm, deep-voiced middle-aged male narrator with a slight British accent, measured pace, warm and authoritative"
+            ></textarea>
+            <div class="field-hint">Describe gender, age, pitch, pace, emotion, and use case. The model generates a voice from this description.</div>
+          </div>
+        </div>
+
+        <!-- Voice Clone panel -->
+        <div id="panelVoiceClone" class="mode-panel" hidden>
+          <div class="form-group">
+            <label for="languageSelectVC">Language</label>
+            <select id="languageSelectVC"></select>
+          </div>
+
+          <div class="form-group" style="margin-top:0.75rem">
+            <label>Reference Audio <span class="card-title-note">(3–10 seconds, clean recording)</span></label>
+            <label class="file-drop" id="fileDrop">
+              <input type="file" id="refAudioFile" accept="audio/*" />
+              <span class="file-drop-icon">🎙</span>
+              <span class="file-drop-text" id="fileDropText">Click to upload or drag &amp; drop an audio file</span>
+            </label>
+            <audio id="refAudioPreview" class="ref-audio-preview" controls hidden></audio>
+          </div>
+
+          <label class="checkbox-label" style="margin-top:0.75rem">
+            <input type="checkbox" id="xVectorOnly" />
+            Use voice embedding only <span class="card-title-note">(no transcript needed, slightly lower quality)</span>
+          </label>
+
+          <div class="form-group" id="refTextGroup" style="margin-top:0.75rem">
+            <label for="refTextInput">Reference Transcript <span class="card-title-note">(what is said in the clip)</span></label>
+            <textarea
+              id="refTextInput"
+              class="instruct-input"
+              rows="2"
+              maxlength="2000"
+              placeholder="Type what is being said in the reference audio clip…"
+            ></textarea>
+            <div class="field-hint">Providing the transcript significantly improves cloning accuracy.</div>
+          </div>
+        </div>
       </section>
 
       <!-- Post-Processing -->

@@ -1,73 +1,136 @@
 import logging
+import os
+from pathlib import Path
+
 import numpy as np
 import torch
 
 logger = logging.getLogger(__name__)
 
+MODEL_IDS = {
+    "custom_voice": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    "voice_design": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+    "voice_clone":  "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+}
+
+# If VOICEGEN_MODEL_DIR is set (or a local ./models/ folder exists), prefer that
+# over downloading from HuggingFace.
+_MODEL_BASE_DIR: Path | None = None
+_env = os.environ.get("VOICEGEN_MODEL_DIR")
+if _env:
+    _MODEL_BASE_DIR = Path(_env)
+    logger.info("Using local model directory: %s", _MODEL_BASE_DIR)
+elif Path("models").is_dir():
+    _MODEL_BASE_DIR = Path("models")
+    logger.info("Found local ./models/ directory — will use it if model folders exist.")
+
+
+def _resolve_model_path(mode: str) -> str:
+    """Return a local path if the model folder exists there, otherwise the HF repo ID."""
+    if _MODEL_BASE_DIR is not None:
+        folder_name = MODEL_IDS[mode].split("/")[-1]   # e.g. Qwen3-TTS-12Hz-1.7B-CustomVoice
+        local = _MODEL_BASE_DIR / folder_name
+        if local.is_dir() and any(local.iterdir()):
+            logger.info("Loading %s from local path: %s", mode, local)
+            return str(local)
+    return MODEL_IDS[mode]
+
 
 class TTSEngine:
-    """Singleton wrapper around Qwen3-TTS. Loads the model once and keeps it in VRAM."""
+    """
+    Manages both Qwen3-TTS model variants.
+    Each model is lazy-loaded on first use and kept resident in VRAM.
+    """
 
     def __init__(self):
-        self._model = None
-        self._loaded = False
+        self._models: dict[str, object] = {}
 
-    def load(self) -> None:
-        """Load the model into GPU memory. Called once at app startup."""
-        logger.info("Loading Qwen3-TTS model...")
+    def _load_model(self, mode: str) -> None:
+        if mode in self._models:
+            return
+
         from qwen_tts import Qwen3TTSModel
 
         device_map = "cuda:0" if torch.cuda.is_available() else "cpu"
         dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-        logger.info("Using device: %s  dtype: %s", device_map, dtype)
+        model_path = _resolve_model_path(mode)
+        logger.info("Loading %s (%s, %s)...", model_path, device_map, dtype)
 
-        self._model = Qwen3TTSModel.from_pretrained(
-            "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice",
+        self._models[mode] = Qwen3TTSModel.from_pretrained(
+            model_path,
             dtype=dtype,
             attn_implementation="sdpa",
             device_map=device_map,
         )
-        self._loaded = True
-        logger.info("Qwen3-TTS model loaded successfully.")
+        logger.info("%s loaded.", model_path)
+
+    def load(self) -> None:
+        """Pre-load the CustomVoice model at startup (fast path for first request)."""
+        self._load_model("custom_voice")
 
     @property
     def is_loaded(self) -> bool:
-        return self._loaded
+        return "custom_voice" in self._models
+
+    def loaded_modes(self) -> list[str]:
+        return list(self._models.keys())
 
     def generate(
         self,
         text: str,
+        mode: str = "custom_voice",
         speaker: str = "vivian",
         language: str = "auto",
         instruct: str = "",
+        ref_audio: tuple | None = None,   # (np.ndarray, sr) for voice_clone
+        ref_text: str = "",
+        x_vector_only: bool = False,
     ) -> tuple[np.ndarray, int]:
         """
-        Run TTS inference.
+        Run TTS inference. Lazy-loads the requested model if not yet in memory.
 
-        Returns:
-            (waveform, sample_rate) where waveform is a float32 numpy array.
+        Returns (waveform: float32 ndarray, sample_rate: int).
         """
-        if not self._loaded:
-            raise RuntimeError("Model is not loaded. Call load() first.")
+        if mode not in MODEL_IDS:
+            raise ValueError(f"Unknown mode: {mode!r}. Use 'custom_voice' or 'voice_design'.")
 
-        # Split long texts on sentence boundaries to avoid OOM
+        self._load_model(mode)
+        model = self._models[mode]
+
         chunks = _split_text(text)
         audio_parts: list[np.ndarray] = []
-        sample_rate: int = 24000  # Qwen3-TTS native output rate
+        sample_rate: int = 24000
 
         for chunk in chunks:
             if not chunk.strip():
                 continue
             with torch.inference_mode():
-                # Returns (List[np.ndarray], int)
-                wavs, sr = self._model.generate_custom_voice(
-                    text=chunk,
-                    speaker=speaker,
-                    language=language,
-                    instruct=instruct or None,
-                )
+                if mode == "custom_voice":
+                    wavs, sr = model.generate_custom_voice(
+                        text=chunk,
+                        speaker=speaker,
+                        language=language,
+                        instruct=instruct or None,
+                    )
+                elif mode == "voice_design":
+                    wavs, sr = model.generate_voice_design(
+                        text=chunk,
+                        language=language,
+                        instruct=instruct or None,
+                    )
+                else:  # voice_clone
+                    if ref_audio is None:
+                        raise ValueError("ref_audio is required for voice_clone mode.")
+                    wavs, sr = model.generate_voice_clone(
+                        text=chunk,
+                        language=language,
+                        ref_audio=ref_audio,
+                        ref_text=ref_text or None,
+                        x_vector_only_mode=x_vector_only,
+                    )
+
             sample_rate = sr
-            waveform = wavs[0]  # batch size 1
+            waveform = wavs[0]
             if isinstance(waveform, torch.Tensor):
                 waveform = waveform.float().cpu().numpy()
             audio_parts.append(waveform)
@@ -75,34 +138,23 @@ class TTSEngine:
         if not audio_parts:
             raise ValueError("No audio was generated.")
 
-        audio = np.concatenate(audio_parts, axis=-1) if len(audio_parts) > 1 else audio_parts[0]
-        return audio, sample_rate
+        return np.concatenate(audio_parts, axis=-1) if len(audio_parts) > 1 else audio_parts[0], sample_rate
 
 
 def _split_text(text: str, max_chars: int = 800) -> list[str]:
-    """
-    Split text into chunks at sentence boundaries to avoid running too much
-    through the model at once. Chunks are kept under max_chars where possible.
-    """
     import re
-
-    # Split on sentence-ending punctuation
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     chunks: list[str] = []
     current = ""
-
     for sentence in sentences:
         if len(current) + len(sentence) + 1 <= max_chars:
             current = (current + " " + sentence).strip()
         else:
             if current:
                 chunks.append(current)
-            # If a single sentence is longer than max_chars, just include it as-is
             current = sentence
-
     if current:
         chunks.append(current)
-
     return chunks
 
 

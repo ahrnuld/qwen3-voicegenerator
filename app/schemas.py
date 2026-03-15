@@ -4,9 +4,15 @@ from typing import Literal
 
 class GenerateRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=5000, description="Text to synthesize")
-    speaker: str = Field(default="vivian", description="Voice/speaker name")
+    mode: Literal["custom_voice", "voice_design", "voice_clone"] = "custom_voice"
+    speaker: str = Field(default="vivian", description="Speaker name (custom_voice mode only)")
     language: str = Field(default="auto", description="Language for synthesis")
-    instruct: str = Field(default="", max_length=500, description="Style/emotion instruction, e.g. 'Speak slowly and warmly'")
+    instruct: str = Field(default="", max_length=1000, description="Style instruction or voice description")
+
+    # Voice clone (voice_clone mode only)
+    ref_audio_b64: str = Field(default="", description="Base64-encoded reference audio file")
+    ref_text: str = Field(default="", max_length=2000, description="Transcript of the reference audio (improves quality)")
+    x_vector_only: bool = Field(default=False, description="Use speaker embedding only — no reference transcript needed")
 
     # Post-processing
     upsample: bool = True

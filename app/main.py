@@ -41,6 +41,7 @@ app = FastAPI(title="Qwen3 TTS", lifespan=lifespan)
 async def health():
     return {
         "model_loaded": engine.is_loaded,
+        "loaded_modes": engine.loaded_modes(),
         "cuda_available": torch.cuda.is_available(),
         "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
     }
@@ -85,19 +86,38 @@ async def generate(req: GenerateRequest):
 
     t0 = time.perf_counter()
     logger.info(
-        "Generating: speaker=%s lang=%s len=%d upsample=%s normalize=%s clip=%s stereo=%s fmt=%s",
-        req.speaker,
-        req.language,
-        len(req.text),
-        req.upsample,
-        req.normalize,
-        req.soft_clip,
-        req.pseudo_stereo,
-        req.output_format,
+        "Generating: mode=%s speaker=%s lang=%s len=%d fmt=%s",
+        req.mode, req.speaker, req.language, len(req.text), req.output_format,
     )
 
+    # Decode reference audio for voice_clone mode
+    ref_audio = None
+    if req.mode == "voice_clone":
+        if not req.ref_audio_b64:
+            raise HTTPException(status_code=422, detail="ref_audio_b64 is required for voice_clone mode.")
+        try:
+            import base64, io
+            import numpy as np
+            import soundfile as sf
+            raw = base64.b64decode(req.ref_audio_b64)
+            wav_data, wav_sr = sf.read(io.BytesIO(raw), dtype="float32", always_2d=False)
+            if wav_data.ndim == 2:
+                wav_data = wav_data.mean(axis=1)  # mix to mono
+            ref_audio = (wav_data, wav_sr)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=f"Could not decode reference audio: {exc}") from exc
+
     try:
-        audio, orig_sr = engine.generate(req.text, speaker=req.speaker, language=req.language, instruct=req.instruct)
+        audio, orig_sr = engine.generate(
+            req.text,
+            mode=req.mode,
+            speaker=req.speaker,
+            language=req.language,
+            instruct=req.instruct,
+            ref_audio=ref_audio,
+            ref_text=req.ref_text,
+            x_vector_only=req.x_vector_only,
+        )
     except torch.cuda.OutOfMemoryError as exc:
         logger.error("GPU OOM: %s", exc)
         raise HTTPException(

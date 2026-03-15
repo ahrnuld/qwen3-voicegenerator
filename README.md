@@ -35,3 +35,6 @@ The model loads once on startup (~30–60 s on first run while weights are cache
 4. Choose WAV or MP3 output.
 5. Click **Generate** and wait.
 6. Play the audio inline or download it.
+
+## TODO
+Improve and explain model downloader (this is not necessary yet, models will be automatically downloaded and cached)

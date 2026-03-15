@@ -243,6 +243,47 @@ select:focus {
 }
 
 /* -----------------------------------------------------------------------
+   Mode tabs
+   ----------------------------------------------------------------------- */
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 1rem;
+  width: fit-content;
+}
+
+.mode-tab {
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.4rem 1rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-tab:last-child { border-right: none; }
+
+.mode-tab:hover:not(.active) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.mode-tab.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.mode-panel { }
+
+/* -----------------------------------------------------------------------
    Collapsible post-processing
    ----------------------------------------------------------------------- */
 button.collapsible {
@@ -344,6 +385,55 @@ input[type="range"] {
   accent-color: var(--accent);
   cursor: pointer;
   height: 4px;
+}
+
+/* -----------------------------------------------------------------------
+   File drop zone (voice clone)
+   ----------------------------------------------------------------------- */
+.file-drop {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-hi);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  margin-top: 0.35rem;
+}
+
+.file-drop:hover,
+.file-drop.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.file-drop input[type="file"] {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-drop-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.file-drop-text {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+}
+
+.file-drop.has-file .file-drop-text {
+  color: var(--text);
+}
+
+.ref-audio-preview {
+  width: 100%;
+  margin-top: 0.6rem;
 }
 
 /* -----------------------------------------------------------------------

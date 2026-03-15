@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:qwen.ai)",
+      "WebFetch(domain:qwenlm.github.io)",
+      "WebFetch(domain:help.aliyun.com)",
+      "WebFetch(domain:www.alibabacloud.com)",
+      "WebFetch(domain:bailian.console.aliyun.com)",
+      "WebFetch(domain:dashscope.aliyuncs.com)",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}
