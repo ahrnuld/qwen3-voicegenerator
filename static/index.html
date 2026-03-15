@@ -10,11 +10,25 @@
   <div class="app">
     <header class="app-header">
       <h1>Qwen3 TTS</h1>
-      <div class="status-badge" id="statusBadge">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Connecting…</span>
+      <div class="header-right">
+        <button class="help-btn" id="helpBtn" aria-expanded="false" title="Usage hints">?</button>
+        <div class="status-badge" id="statusBadge">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Connecting…</span>
+        </div>
       </div>
     </header>
+
+    <div class="help-panel" id="helpPanel" hidden>
+      <ol class="help-list">
+        <li>Enter text to synthesize — up to 5 000 characters.</li>
+        <li>Choose a <strong>speaker</strong> and <strong>language</strong>. The style instruction field lets you shape tone and emotion separately from the spoken text.</li>
+        <li>Adjust <strong>Post-Processing</strong> — upsample, normalize, soft clip, and pseudo-stereo are all on by default.</li>
+        <li>Pick <strong>WAV</strong> (lossless) or <strong>MP3</strong> as the output format.</li>
+        <li>Click <strong>Generate</strong> and wait — first generation loads the model; subsequent ones are fast.</li>
+        <li>Play the result inline or use <strong>Download</strong> to save the file.</li>
+      </ol>
+    </div>
 
     <main class="app-main">
 
@@ -112,6 +126,20 @@
             <div class="form-group inline slider-group">
               <label for="delaySlider">Delay <span id="delayVal">15</span> ms</label>
               <input type="range" id="delaySlider" min="1" max="50" step="1" value="15" />
+            </div>
+
+            <hr class="pp-divider" />
+
+            <label class="pp-label">Lead silence</label>
+            <div class="form-group inline silence-group">
+              <input type="number" id="leadSilence" class="silence-input" min="0" max="5000" step="10" value="0" />
+              <span class="silence-unit">ms</span>
+            </div>
+
+            <label class="pp-label">Tail silence</label>
+            <div class="form-group inline silence-group">
+              <input type="number" id="tailSilence" class="silence-input" min="0" max="5000" step="10" value="0" />
+              <span class="silence-unit">ms</span>
             </div>
           </div>
         </div>

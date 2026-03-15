@@ -347,6 +347,50 @@ input[type="range"] {
 }
 
 /* -----------------------------------------------------------------------
+   Silence inputs
+   ----------------------------------------------------------------------- */
+.pp-label {
+  font-size: 0.88rem;
+  color: var(--text);
+  white-space: nowrap;
+  align-self: center;
+}
+
+.silence-group {
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.silence-input {
+  width: 80px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  padding: 0.3rem 0.55rem;
+  text-align: right;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -moz-appearance: textfield;
+}
+
+.silence-input::-webkit-outer-spin-button,
+.silence-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+.silence-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.silence-unit {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* -----------------------------------------------------------------------
    Format + voice settings row  (two-column layout)
    ----------------------------------------------------------------------- */
 .settings-row {

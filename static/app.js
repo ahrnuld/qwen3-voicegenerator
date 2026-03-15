@@ -3,7 +3,8 @@
    ----------------------------------------------------------------------- */
 
 const MAX_TEXT_LENGTH = 5000;
-const WARN_THRESHOLD   = 0.85; // show warning at 85 % of limit
+const WARN_THRESHOLD  = 0.85;
+const STORAGE_KEY     = "qwen3tts_state";
 
 // DOM references (resolved after DOMContentLoaded)
 let els = {};
@@ -12,14 +13,13 @@ function $(id) { return document.getElementById(id); }
 
 document.addEventListener("DOMContentLoaded", () => {
   els = {
+    helpBtn:        $("helpBtn"),
+    helpPanel:      $("helpPanel"),
     statusDot:      $("statusDot"),
     statusText:     $("statusText"),
     textInput:      $("textInput"),
     charCount:      $("charCount"),
     charMax:        $("charMax"),
-    charCounter:    $("textInput").closest
-      ? $("textInput").parentElement.querySelector(".char-counter")
-      : null,
     speakerSelect:  $("speakerSelect"),
     speakerHint:    $("speakerHint"),
     languageSelect: $("languageSelect"),
@@ -35,6 +35,8 @@ document.addEventListener("DOMContentLoaded", () => {
     stereoCheck:    $("stereoCheck"),
     delaySlider:    $("delaySlider"),
     delayVal:       $("delayVal"),
+    leadSilence:    $("leadSilence"),
+    tailSilence:    $("tailSilence"),
     generateBtn:    $("generateBtn"),
     generateLabel:  $("generateLabel"),
     resultCard:     $("resultCard"),
@@ -44,16 +46,108 @@ document.addEventListener("DOMContentLoaded", () => {
     errorBox:       $("errorBox"),
   };
 
-  // Re-find char-counter by class since .closest is on the textarea element
   els.charCounterEl = document.querySelector(".char-counter");
 
+  initHelp();
   initSliders();
   initCollapsible();
   initCharCounter();
+  initPersistence();
   els.generateBtn.addEventListener("click", handleGenerate);
   loadOptions();
   pollHealth();
 });
+
+// ---------------------------------------------------------------------------
+// Persistence
+// ---------------------------------------------------------------------------
+
+function saveState() {
+  const format = document.querySelector('input[name="format"]:checked');
+  const state = {
+    text:         els.textInput.value,
+    speaker:      els.speakerSelect.value,
+    language:     els.languageSelect.value,
+    instruct:     els.instructInput.value,
+    upsample:     els.upsampleCheck.checked,
+    targetSr:     els.targetSrSelect.value,
+    normalize:    els.normalizeCheck.checked,
+    softClip:     els.softClipCheck.checked,
+    drive:        els.driveSlider.value,
+    stereo:       els.stereoCheck.checked,
+    delay:        els.delaySlider.value,
+    leadSilence:  els.leadSilence.value,
+    tailSilence:  els.tailSilence.value,
+    format:       format ? format.value : "wav",
+    ppExpanded:   els.ppToggle.getAttribute("aria-expanded") === "true",
+  };
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage full */ }
+}
+
+function restoreState() {
+  let state;
+  try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return; }
+  if (!state) return;
+
+  if (state.text        != null) els.textInput.value        = state.text;
+  if (state.instruct    != null) els.instructInput.value    = state.instruct;
+  if (state.upsample    != null) els.upsampleCheck.checked  = state.upsample;
+  if (state.normalize   != null) els.normalizeCheck.checked = state.normalize;
+  if (state.softClip    != null) els.softClipCheck.checked  = state.softClip;
+  if (state.stereo      != null) els.stereoCheck.checked    = state.stereo;
+  if (state.leadSilence != null) els.leadSilence.value      = state.leadSilence;
+  if (state.tailSilence != null) els.tailSilence.value      = state.tailSilence;
+
+  if (state.drive != null) {
+    els.driveSlider.value       = state.drive;
+    els.driveVal.textContent    = parseFloat(state.drive).toFixed(1);
+  }
+  if (state.delay != null) {
+    els.delaySlider.value       = state.delay;
+    els.delayVal.textContent    = state.delay;
+  }
+  if (state.targetSr != null) {
+    els.targetSrSelect.value = state.targetSr;
+  }
+  if (state.format != null) {
+    const radio = document.querySelector(`input[name="format"][value="${state.format}"]`);
+    if (radio) radio.checked = true;
+  }
+  if (state.ppExpanded != null) {
+    els.ppToggle.setAttribute("aria-expanded", String(state.ppExpanded));
+    els.ppBody.hidden = !state.ppExpanded;
+  }
+
+  // Selects populated by API — deferred to restoreSelectState()
+  els._savedSpeaker  = state.speaker;
+  els._savedLanguage = state.language;
+
+  updateCharCount();
+}
+
+// Called after the API populates the speaker/language dropdowns
+function restoreSelectState() {
+  if (els._savedSpeaker)  els.speakerSelect.value  = els._savedSpeaker;
+  if (els._savedLanguage) els.languageSelect.value = els._savedLanguage;
+  updateSpeakerHint();
+}
+
+function initPersistence() {
+  restoreState();
+
+  // Save on any change
+  const inputs = [
+    els.textInput, els.instructInput,
+    els.upsampleCheck, els.normalizeCheck, els.softClipCheck, els.stereoCheck,
+    els.driveSlider, els.delaySlider,
+    els.targetSrSelect, els.speakerSelect, els.languageSelect,
+    els.leadSilence, els.tailSilence,
+  ];
+  inputs.forEach(el => el.addEventListener("input", saveState));
+  inputs.forEach(el => el.addEventListener("change", saveState));
+  document.querySelectorAll('input[name="format"]').forEach(r => r.addEventListener("change", saveState));
+  els.ppToggle.addEventListener("click", () => setTimeout(saveState, 0));
+}
 
 // ---------------------------------------------------------------------------
 // Health polling
@@ -84,18 +178,15 @@ async function pollHealth() {
 function setStatus(state, label) {
   const dot  = els.statusDot;
   const text = els.statusText;
-
   dot.className = "status-dot";
-
   const map = {
-    ok:          ["ok",    label ?? "Ready"],
-    warn:        ["busy",  label ?? "Warning"],
-    error:       ["error", label ?? "Error"],
-    loading:     ["busy",  label ?? "Loading…"],
-    connecting:  ["",      label ?? "Connecting…"],
-    generating:  ["busy",  label ?? "Generating…"],
+    ok:         ["ok",    label ?? "Ready"],
+    warn:       ["busy",  label ?? "Warning"],
+    error:      ["error", label ?? "Error"],
+    loading:    ["busy",  label ?? "Loading…"],
+    connecting: ["",      label ?? "Connecting…"],
+    generating: ["busy",  label ?? "Generating…"],
   };
-
   const [cls, txt] = map[state] ?? ["", state];
   if (cls) dot.classList.add(cls);
   text.textContent = txt;
@@ -105,7 +196,6 @@ function setStatus(state, label) {
 // Load options from API
 // ---------------------------------------------------------------------------
 
-// speakerDescriptions is populated from /api/options
 const speakerDescriptions = {};
 
 async function loadOptions() {
@@ -116,9 +206,11 @@ async function loadOptions() {
     populateSelect(els.speakerSelect, data.speakers);
     populateSelect(els.languageSelect, data.languages);
 
-    // Build description map and wire up hint
     data.speakers.forEach(s => { speakerDescriptions[s.id] = s.description; });
-    updateSpeakerHint();
+
+    // Restore saved selections now that options exist
+    restoreSelectState();
+
     els.speakerSelect.addEventListener("change", updateSpeakerHint);
 
     if (data.max_text_length) {
@@ -131,15 +223,13 @@ async function loadOptions() {
 }
 
 function updateSpeakerHint() {
-  const id = els.speakerSelect.value;
-  els.speakerHint.textContent = speakerDescriptions[id] ?? "";
+  els.speakerHint.textContent = speakerDescriptions[els.speakerSelect.value] ?? "";
 }
 
 function populateSelect(sel, items) {
   sel.innerHTML = "";
   items.forEach(item => {
     const opt = document.createElement("option");
-    // items are either {id, label} objects or plain strings
     if (typeof item === "object") {
       opt.value = item.id;
       opt.textContent = item.label;
@@ -148,6 +238,18 @@ function populateSelect(sel, items) {
       opt.textContent = item;
     }
     sel.appendChild(opt);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Help panel
+// ---------------------------------------------------------------------------
+
+function initHelp() {
+  els.helpBtn.addEventListener("click", () => {
+    const open = els.helpBtn.getAttribute("aria-expanded") === "true";
+    els.helpBtn.setAttribute("aria-expanded", String(!open));
+    els.helpPanel.hidden = open;
   });
 }
 
@@ -189,17 +291,16 @@ function updateCharCount() {
   const len  = els.textInput.value.length;
   const max  = parseInt(els.charMax.textContent, 10) || MAX_TEXT_LENGTH;
   const warn = Math.floor(max * WARN_THRESHOLD);
-
   els.charCount.textContent = len;
   const el = els.charCounterEl;
   if (!el) return;
   el.classList.remove("warn", "limit");
-  if (len >= max)  el.classList.add("limit");
+  if (len >= max)       el.classList.add("limit");
   else if (len >= warn) el.classList.add("warn");
 }
 
 // ---------------------------------------------------------------------------
-// Generate  (listener wired in DOMContentLoaded below)
+// Generate
 // ---------------------------------------------------------------------------
 
 async function handleGenerate() {
@@ -216,17 +317,19 @@ async function handleGenerate() {
 
   const payload = {
     text,
-    speaker:           els.speakerSelect.value,
-    language:          els.languageSelect.value,
-    instruct:          els.instructInput.value.trim(),
-    upsample:          els.upsampleCheck.checked,
+    speaker:            els.speakerSelect.value,
+    language:           els.languageSelect.value,
+    instruct:           els.instructInput.value.trim(),
+    upsample:           els.upsampleCheck.checked,
     target_sample_rate: parseInt(els.targetSrSelect.value, 10),
-    normalize:         els.normalizeCheck.checked,
-    soft_clip:         els.softClipCheck.checked,
-    soft_clip_drive:   parseFloat(els.driveSlider.value),
-    pseudo_stereo:     els.stereoCheck.checked,
-    stereo_delay_ms:   parseFloat(els.delaySlider.value),
-    output_format:     document.querySelector('input[name="format"]:checked').value,
+    normalize:          els.normalizeCheck.checked,
+    soft_clip:          els.softClipCheck.checked,
+    soft_clip_drive:    parseFloat(els.driveSlider.value),
+    pseudo_stereo:      els.stereoCheck.checked,
+    stereo_delay_ms:    parseFloat(els.delaySlider.value),
+    lead_silence_ms:    Math.max(0, parseFloat(els.leadSilence.value) || 0),
+    tail_silence_ms:    Math.max(0, parseFloat(els.tailSilence.value) || 0),
+    output_format:      document.querySelector('input[name="format"]:checked').value,
   };
 
   const t0 = performance.now();
@@ -240,23 +343,17 @@ async function handleGenerate() {
 
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
-      try {
-        const err = await res.json();
-        detail = err.detail ?? detail;
-      } catch { /* ignore */ }
+      try { detail = (await res.json()).detail ?? detail; } catch { /* ignore */ }
       throw new Error(detail);
     }
 
-    const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    const ext  = payload.output_format;
+    const blob    = await res.blob();
+    const url     = URL.createObjectURL(blob);
     const elapsed = ((performance.now() - t0) / 1000).toFixed(2);
-
-    // Use server-reported time if available
     const serverTime = res.headers.get("X-Generation-Time");
     const displayTime = serverTime ? `${parseFloat(serverTime).toFixed(2)}s` : `${elapsed}s`;
 
-    showResult(url, ext, displayTime);
+    showResult(url, payload.output_format, displayTime);
     setStatus("ok", "Ready");
   } catch (err) {
     showError(err.message || "An unknown error occurred.");
@@ -272,18 +369,14 @@ async function handleGenerate() {
 
 function setGenerating(active) {
   els.generateBtn.disabled = active;
-  if (active) {
-    els.generateLabel.innerHTML = '<span class="spinner"></span> Generating…';
-  } else {
-    els.generateLabel.innerHTML = '&#9654; Generate';
-  }
+  els.generateLabel.innerHTML = active
+    ? '<span class="spinner"></span> Generating…'
+    : '&#9654; Generate';
 }
 
 function showResult(url, ext, elapsed) {
-  // Revoke previous object URL to avoid memory leaks
   const prev = els.audioPlayer.src;
   if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
-
   els.audioPlayer.src = url;
   els.downloadLink.href = url;
   els.downloadLink.download = `tts_output.${ext}`;
@@ -291,9 +384,7 @@ function showResult(url, ext, elapsed) {
   els.resultCard.hidden = false;
 }
 
-function hideResult() {
-  els.resultCard.hidden = true;
-}
+function hideResult() { els.resultCard.hidden = true; }
 
 function showError(msg) {
   els.errorBox.textContent = msg;

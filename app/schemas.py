@@ -17,6 +17,10 @@ class GenerateRequest(BaseModel):
     pseudo_stereo: bool = True
     stereo_delay_ms: float = Field(default=15.0, ge=1.0, le=50.0, description="Stereo delay in milliseconds")
 
+    # Silence padding
+    lead_silence_ms: float = Field(default=0.0, ge=0.0, le=5000.0, description="Silence to prepend in milliseconds")
+    tail_silence_ms: float = Field(default=0.0, ge=0.0, le=5000.0, description="Silence to append in milliseconds")
+
     # Output
     output_format: Literal["wav", "mp3"] = "wav"
 

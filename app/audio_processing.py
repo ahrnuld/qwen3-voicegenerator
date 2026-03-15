@@ -2,7 +2,7 @@
 Audio post-processing pipeline.
 
 Each step is independently toggleable. The pipeline runs in order:
-  resample → normalize → soft_clip → pseudo_stereo → export
+  resample → normalize → soft_clip → pseudo_stereo → pad_silence → export
 """
 
 import io
@@ -68,6 +68,22 @@ def make_pseudo_stereo(audio: np.ndarray, sr: int, delay_ms: float = 15.0) -> np
     return np.stack([left, right], axis=0)  # (2, T)
 
 
+def pad_silence(audio: np.ndarray, sr: int, lead_ms: float, tail_ms: float) -> np.ndarray:
+    """Prepend and/or append silence (zeros) to the audio."""
+    lead_samples = int(sr * lead_ms / 1000)
+    tail_samples = int(sr * tail_ms / 1000)
+
+    if audio.ndim == 2:
+        # (channels, samples)
+        lead = np.zeros((audio.shape[0], lead_samples), dtype=audio.dtype)
+        tail  = np.zeros((audio.shape[0], tail_samples),  dtype=audio.dtype)
+        return np.concatenate([lead, audio, tail], axis=1)
+    else:
+        lead = np.zeros(lead_samples, dtype=audio.dtype)
+        tail  = np.zeros(tail_samples,  dtype=audio.dtype)
+        return np.concatenate([lead, audio, tail])
+
+
 def export_audio(audio: np.ndarray, sr: int, fmt: str = "wav") -> io.BytesIO:
     """
     Encode audio to WAV or MP3 and return a BytesIO buffer.
@@ -119,6 +135,8 @@ def build_pipeline(
     soft_clip_drive: float,
     pseudo_stereo: bool,
     stereo_delay_ms: float,
+    lead_silence_ms: float,
+    tail_silence_ms: float,
     output_format: str,
 ) -> Callable[[np.ndarray, int], tuple[io.BytesIO, str]]:
     """
@@ -144,6 +162,10 @@ def build_pipeline(
         if pseudo_stereo:
             logger.debug("Pseudo-stereo (delay=%.1f ms)", stereo_delay_ms)
             audio = make_pseudo_stereo(audio, sr, delay_ms=stereo_delay_ms)
+
+        if lead_silence_ms > 0 or tail_silence_ms > 0:
+            logger.debug("Padding silence: lead=%.0f ms  tail=%.0f ms", lead_silence_ms, tail_silence_ms)
+            audio = pad_silence(audio, sr, lead_silence_ms, tail_silence_ms)
 
         buf = export_audio(audio, sr, fmt=output_format)
         content_type = "audio/wav" if output_format == "wav" else "audio/mpeg"

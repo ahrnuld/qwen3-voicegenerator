@@ -116,6 +116,8 @@ async def generate(req: GenerateRequest):
         soft_clip_drive=req.soft_clip_drive,
         pseudo_stereo=req.pseudo_stereo,
         stereo_delay_ms=req.stereo_delay_ms,
+        lead_silence_ms=req.lead_silence_ms,
+        tail_silence_ms=req.tail_silence_ms,
         output_format=req.output_format,
     )
 
